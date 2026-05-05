@@ -17,6 +17,133 @@
 
 
 /* ----------------------------------------------------------------
+   THEME CUSTOMIZATION
+   Converts user-chosen hex colors to OKLCH and applies them as
+   inline style overrides on :root. Persists to chrome.storage.local.
+   ---------------------------------------------------------------- */
+
+const COLOR_KEYS = ['paper', 'ink', 'amber', 'sage', 'rose'];
+
+// hex -> sRGB bytes -> linear RGB -> LMS -> Oklab -> OKLCH
+function hexToOklch(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+
+  const toLinear = (v) => {
+    v /= 255;
+    return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  const lr = toLinear(r), lg = toLinear(g), lb = toLinear(b);
+
+  const l_ = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb);
+  const m_ = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);
+  const s_ = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
+
+  const L = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_;
+  const a = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_;
+  const okb = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_;
+
+  const C = Math.sqrt(a * a + okb * okb);
+  let H = Math.atan2(okb, a) * (180 / Math.PI);
+  if (H < 0) H += 360;
+
+  return { L, C, H };
+}
+
+function setColorChannels(prefix, oklch) {
+  const style = document.documentElement.style;
+  style.setProperty(`--base-${prefix}-L`, oklch.L.toFixed(4));
+  style.setProperty(`--base-${prefix}-C`, oklch.C.toFixed(4));
+  style.setProperty(`--base-${prefix}-H`, oklch.H.toFixed(1));
+}
+
+function clearColorChannels(prefix) {
+  const style = document.documentElement.style;
+  style.removeProperty(`--base-${prefix}-L`);
+  style.removeProperty(`--base-${prefix}-C`);
+  style.removeProperty(`--base-${prefix}-H`);
+}
+
+// When background or text changes, derive dependent colors so borders,
+// card surfaces, and secondary text stay legible against the new base.
+function applyDerivedColors(overrides) {
+  const style = document.documentElement.style;
+
+  if (overrides.paper) {
+    const paper = hexToOklch(overrides.paper);
+    const isDark = paper.L < 0.5;
+
+    setColorChannels('card-bg', {
+      L: isDark ? paper.L + 0.02 : Math.min(paper.L + 0.02, 0.995),
+      C: paper.C * 0.8,
+      H: paper.H,
+    });
+
+    setColorChannels('warm-gray', {
+      L: isDark ? paper.L + 0.10 : paper.L - 0.06,
+      C: Math.min(paper.C, 0.015),
+      H: paper.H,
+    });
+
+    if (isDark) {
+      style.setProperty('--shadow', 'oklch(0 0 0 / 0.25)');
+      style.setProperty('--overlay-shadow-deep', 'oklch(0 0 0 / 0.5)');
+      style.setProperty('--overlay-shadow-card', 'oklch(0 0 0 / 0.3)');
+      style.setProperty('--on-accent', 'oklch(0.15 0 0)');
+    } else {
+      style.removeProperty('--shadow');
+      style.removeProperty('--overlay-shadow-deep');
+      style.removeProperty('--overlay-shadow-card');
+      style.removeProperty('--on-accent');
+    }
+  }
+
+  if (overrides.paper && overrides.ink) {
+    const paper = hexToOklch(overrides.paper);
+    const ink = hexToOklch(overrides.ink);
+    setColorChannels('muted', {
+      L: (paper.L + ink.L) / 2,
+      C: 0.015,
+      H: (paper.H + ink.H) / 2,
+    });
+  } else if (overrides.paper) {
+    const paper = hexToOklch(overrides.paper);
+    setColorChannels('muted', {
+      L: paper.L < 0.5 ? 0.60 : 0.65,
+      C: 0.015,
+      H: paper.H,
+    });
+  }
+}
+
+function clearDerivedColors() {
+  const style = document.documentElement.style;
+  ['card-bg', 'warm-gray', 'muted'].forEach(k => clearColorChannels(k));
+  ['--shadow', '--overlay-shadow-deep', '--overlay-shadow-card', '--on-accent']
+    .forEach(p => style.removeProperty(p));
+}
+
+function applyThemeOverrides(overrides) {
+  for (const key of COLOR_KEYS) {
+    if (overrides[key]) {
+      setColorChannels(key, hexToOklch(overrides[key]));
+    }
+  }
+  applyDerivedColors(overrides);
+}
+
+async function loadSavedTheme() {
+  const data = await chrome.storage.local.get('themeOverrides');
+  if (data.themeOverrides && Object.keys(data.themeOverrides).length > 0) {
+    applyThemeOverrides(data.themeOverrides);
+  }
+}
+
+loadSavedTheme();
+
+
+/* ----------------------------------------------------------------
    CHROME TABS — Direct API Access
 
    Since this page IS the extension's new tab page, it has full
@@ -345,16 +472,19 @@ function playCloseSound() {
  * Pure CSS + JS, no libraries.
  */
 function shootConfetti(x, y) {
+  // Read theme-aware palette from CSS vars so confetti follows recolors + dark mode
+  const cs = getComputedStyle(document.documentElement);
+  const v = (name) => cs.getPropertyValue(name).trim();
   const colors = [
-    '#c8713a', // amber
-    '#e8a070', // amber light
-    '#5a7a62', // sage
-    '#8aaa92', // sage light
-    '#5a6b7a', // slate
-    '#8a9baa', // slate light
-    '#d4b896', // warm paper
-    '#b35a5a', // rose
-  ];
+    v('--accent-amber'),
+    v('--confetti-amber-light'),
+    v('--accent-sage'),
+    v('--confetti-sage-light'),
+    v('--accent-slate'),
+    v('--confetti-slate-light'),
+    v('--confetti-warm-tan'),
+    v('--accent-rose'),
+  ].filter(Boolean);
 
   const particleCount = 17;
 
@@ -1473,6 +1603,104 @@ document.addEventListener('input', async (e) => {
   } catch (err) {
     console.warn('[tab-out] Archive search failed:', err);
   }
+});
+
+
+/* ----------------------------------------------------------------
+   COLOR PICKER PANEL
+   ---------------------------------------------------------------- */
+
+const colorPanel = document.getElementById('colorPanelModal');
+const colorSwatches = colorPanel.querySelectorAll('.color-swatch');
+const colorHexInputs = colorPanel.querySelectorAll('.color-hex');
+
+let workingOverrides = {};
+
+function isValidHex(str) {
+  return /^#[0-9a-fA-F]{6}$/.test(str);
+}
+
+async function populateColorPanel() {
+  const data = await chrome.storage.local.get('themeOverrides');
+  const saved = data.themeOverrides || {};
+  workingOverrides = { ...saved };
+
+  colorSwatches.forEach(swatch => {
+    const key = swatch.dataset.colorKey;
+    const hexInput = colorPanel.querySelector(`.color-hex[data-color-key="${key}"]`);
+    const value = saved[key] || hexInput.placeholder;
+    swatch.value = value;
+    hexInput.value = saved[key] || '';
+  });
+}
+
+function previewColor(key, hex) {
+  if (!isValidHex(hex)) return;
+  workingOverrides[key] = hex;
+  setColorChannels(key, hexToOklch(hex));
+  applyDerivedColors(workingOverrides);
+}
+
+document.getElementById('openColorPanel').addEventListener('click', async () => {
+  await populateColorPanel();
+  colorPanel.classList.add('visible');
+});
+
+function closeColorPanel() {
+  colorPanel.classList.remove('visible');
+
+  const toSave = {};
+  for (const key of COLOR_KEYS) {
+    if (workingOverrides[key]) toSave[key] = workingOverrides[key];
+  }
+
+  if (Object.keys(toSave).length > 0) {
+    chrome.storage.local.set({ themeOverrides: toSave });
+  } else {
+    chrome.storage.local.remove('themeOverrides');
+  }
+}
+
+document.getElementById('colorDone').addEventListener('click', closeColorPanel);
+colorPanel.addEventListener('click', (e) => {
+  if (e.target === colorPanel) closeColorPanel();
+});
+
+colorSwatches.forEach(swatch => {
+  swatch.addEventListener('input', (e) => {
+    const key = e.target.dataset.colorKey;
+    const hex = e.target.value;
+    const hexInput = colorPanel.querySelector(`.color-hex[data-color-key="${key}"]`);
+    hexInput.value = hex;
+    previewColor(key, hex);
+  });
+});
+
+colorHexInputs.forEach(input => {
+  input.addEventListener('input', (e) => {
+    let val = e.target.value.trim();
+    if (val.length >= 6 && !val.startsWith('#')) {
+      val = '#' + val;
+      e.target.value = val;
+    }
+    if (!isValidHex(val)) return;
+    const key = e.target.dataset.colorKey;
+    const swatch = colorPanel.querySelector(`.color-swatch[data-color-key="${key}"]`);
+    swatch.value = val;
+    previewColor(key, val);
+  });
+});
+
+document.getElementById('colorReset').addEventListener('click', () => {
+  workingOverrides = {};
+  COLOR_KEYS.forEach(k => clearColorChannels(k));
+  clearDerivedColors();
+  colorSwatches.forEach(swatch => {
+    const hexInput = colorPanel.querySelector(`.color-hex[data-color-key="${swatch.dataset.colorKey}"]`);
+    swatch.value = hexInput.placeholder;
+    hexInput.value = '';
+  });
+  chrome.storage.local.remove('themeOverrides');
 });
 
 

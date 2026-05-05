@@ -8,10 +8,16 @@
  * The badge counts real web tabs (skipping chrome:// and extension pages).
  *
  * Color coding gives a quick at-a-glance health signal:
- *   Green  (#3d7a4a) → 1–10 tabs  (focused, manageable)
- *   Amber  (#b8892e) → 11–20 tabs (getting busy)
- *   Red    (#b35a5a) → 21+ tabs   (time to cull!)
+ *   Green  → 1–10 tabs  (focused, manageable)
+ *   Amber  → 11–20 tabs (getting busy)
+ *   Red    → 21+ tabs   (time to cull!)
  */
+
+// Badge colors — service workers have no DOM, so CSS variables are unavailable.
+// These match the OKLCH accent values in style.css (converted back to hex).
+const BADGE_COLOR_CALM = '#3d7a4a'; // status-active
+const BADGE_COLOR_WARM = '#b8892e'; // status-cooling
+const BADGE_COLOR_HOT  = '#b35a5a'; // accent-rose
 
 // ─── Badge updater ────────────────────────────────────────────────────────────
 
@@ -43,13 +49,11 @@ async function updateBadge() {
     if (count === 0) return;
 
     // Pick badge color based on workload level
-    let color;
-    if (count <= 10) {
-      color = '#3d7a4a'; // Green — you're in control
-    } else if (count <= 20) {
-      color = '#b8892e'; // Amber — things are piling up
-    } else {
-      color = '#b35a5a'; // Red — time to focus and close some tabs
+    let color = BADGE_COLOR_CALM;
+    if (count > 10 && count <= 20) {
+      color = BADGE_COLOR_WARM;
+    } else if (count > 20) {
+      color = BADGE_COLOR_HOT;
     }
 
     await chrome.action.setBadgeBackgroundColor({ color });
