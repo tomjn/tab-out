@@ -1607,6 +1607,120 @@ document.addEventListener('input', async (e) => {
 
 
 /* ----------------------------------------------------------------
+   TAB SEARCH — filter the open-tabs dashboard live
+
+   Hides non-matching chips and whole domain cards as the user types.
+   Matches against the tab title, full URL, and the site/group name,
+   so "github", a page title, or a URL fragment all work. Operates on
+   the already-rendered DOM (no re-render) — same spirit as the
+   archive search above.
+   ---------------------------------------------------------------- */
+
+/**
+ * isTypingTarget(el)
+ * True when the element is a text field, so "/" doesn't hijack typing.
+ */
+function isTypingTarget(el) {
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+}
+
+/**
+ * applyTabFilter(query)
+ * Shows/hides domain cards and their tab chips to match the query.
+ * Empty query restores the default (collapsed-overflow) view.
+ */
+function applyTabFilter(query) {
+  const q = (query || '').trim().toLowerCase();
+  const cards = document.querySelectorAll('#openTabsMissions .mission-card');
+  const emptyEl = document.getElementById('searchEmpty');
+
+  // Empty query — restore the default view
+  if (!q) {
+    cards.forEach(card => {
+      card.style.display = '';
+      card.querySelectorAll('.page-chip').forEach(chip => { chip.style.display = ''; });
+      const overflow = card.querySelector('.page-chips-overflow');
+      if (overflow) overflow.style.display = 'none';
+      const expandBtn = card.querySelector('.page-chip-overflow');
+      if (expandBtn) expandBtn.style.display = '';
+    });
+    if (emptyEl) emptyEl.style.display = 'none';
+    return;
+  }
+
+  let anyVisible = false;
+
+  cards.forEach(card => {
+    const nameEl = card.querySelector('.mission-name');
+    const nameMatch = nameEl ? nameEl.textContent.toLowerCase().includes(q) : false;
+
+    let cardHasMatch = false;
+    // Search every tab chip, including those tucked inside the "+N more" overflow
+    card.querySelectorAll('.page-chip[data-action="focus-tab"]').forEach(chip => {
+      const textEl = chip.querySelector('.chip-text');
+      const text   = (textEl ? textEl.textContent : '').toLowerCase();
+      const url    = (chip.dataset.tabUrl || '').toLowerCase();
+      const show   = nameMatch || text.includes(q) || url.includes(q);
+      chip.style.display = show ? '' : 'none';
+      if (show) cardHasMatch = true;
+    });
+
+    // Reveal collapsed overflow chips so matches inside them are visible,
+    // and hide the "+N more" button while a search is active.
+    const overflow = card.querySelector('.page-chips-overflow');
+    if (overflow) overflow.style.display = cardHasMatch ? 'contents' : 'none';
+    const expandBtn = card.querySelector('.page-chip-overflow');
+    if (expandBtn) expandBtn.style.display = 'none';
+
+    card.style.display = cardHasMatch ? '' : 'none';
+    if (cardHasMatch) anyVisible = true;
+  });
+
+  if (emptyEl) {
+    emptyEl.style.display = anyVisible ? 'none' : 'block';
+    const qEl = document.getElementById('searchEmptyQ');
+    if (qEl) qEl.textContent = query.trim();
+  }
+}
+
+// ---- Filter as the user types ----
+document.addEventListener('input', (e) => {
+  if (e.target.id !== 'tabSearch') return;
+  applyTabFilter(e.target.value);
+});
+
+// ---- Keyboard shortcuts: Cmd/Ctrl+F or "/" to focus, Esc to clear ----
+document.addEventListener('keydown', (e) => {
+  const searchInput = document.getElementById('tabSearch');
+  if (!searchInput) return;
+
+  // Cmd/Ctrl+F — focus search, overriding Chrome's native find-in-page
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'F')) {
+    e.preventDefault();
+    searchInput.focus();
+    searchInput.select();
+    return;
+  }
+
+  // "/" — focus search, but only when not already typing in a field
+  if (e.key === '/' && !isTypingTarget(e.target)) {
+    e.preventDefault();
+    searchInput.focus();
+    return;
+  }
+
+  // Esc — clear and blur when the search box is focused
+  if (e.key === 'Escape' && e.target === searchInput) {
+    searchInput.value = '';
+    applyTabFilter('');
+    searchInput.blur();
+  }
+});
+
+
+/* ----------------------------------------------------------------
    COLOR PICKER PANEL
    ---------------------------------------------------------------- */
 
