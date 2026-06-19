@@ -844,6 +844,11 @@ let domainGroups = [];
 // live re-render (see the animate-in toggle in renderStaticDashboard).
 let hasRenderedTabs = false;
 
+// Stable IDs of domain groups whose "+N more" overflow the user has expanded.
+// A live re-render rebuilds the cards collapsed, so we re-expand these after
+// (see applyExpandedGroups). Keeps closing several revealed tabs in a row sane.
+const expandedGroups = new Set();
+
 
 /* ----------------------------------------------------------------
    HELPER: filter out browser-internal pages
@@ -1371,6 +1376,8 @@ document.addEventListener('click', async (e) => {
       overflowContainer.style.display = 'contents';
       actionEl.remove();
     }
+    // Remember this group is expanded so a live re-render keeps it open.
+    if (card && card.dataset.domainId) expandedGroups.add(card.dataset.domainId);
     return;
   }
 
@@ -1875,6 +1882,28 @@ let liveRefreshTimer = null;
 const LIVE_REFRESH_DEBOUNCE = 350; // ms to coalesce a burst of tab events
 const USER_ACTION_QUIET     = 700; // ms to let the user's own animations finish
 
+/**
+ * applyExpandedGroups()
+ * Re-expands any "+N more" overflow the user had opened, since a re-render
+ * rebuilds cards collapsed. Also forgets groups that no longer exist so a
+ * later same-domain group doesn't auto-expand unexpectedly.
+ */
+function applyExpandedGroups() {
+  const liveIds = new Set();
+  document.querySelectorAll('#openTabsMissions .mission-card').forEach(card => {
+    const id = card.dataset.domainId;
+    liveIds.add(id);
+    if (!expandedGroups.has(id)) return;
+    const overflow = card.querySelector('.page-chips-overflow');
+    if (overflow) overflow.style.display = 'contents';
+    const expandBtn = card.querySelector('.page-chip-overflow');
+    if (expandBtn) expandBtn.remove();
+  });
+  for (const id of expandedGroups) {
+    if (!liveIds.has(id)) expandedGroups.delete(id);
+  }
+}
+
 async function runLiveRefresh() {
   liveRefreshTimer = null;
 
@@ -1890,7 +1919,8 @@ async function runLiveRefresh() {
 
   const query = document.getElementById('tabSearch')?.value || '';
   await renderDashboard();
-  if (query.trim()) applyTabFilter(query); // restore the active filter
+  applyExpandedGroups();                    // keep opened "+N more" groups open
+  if (query.trim()) applyTabFilter(query);  // restore the active filter
 }
 
 function scheduleLiveRefresh() {
