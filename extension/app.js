@@ -172,6 +172,7 @@ async function fetchOpenTabs() {
       title:    t.title,
       windowId: t.windowId,
       active:   t.active,
+      pinned:   t.pinned,
       // Flag Tab Out's own pages so we can detect duplicate new tabs
       isTabOut: t.url === newtabUrl || t.url === 'chrome://newtab/',
     }));
@@ -838,6 +839,11 @@ const ICONS = {
    ---------------------------------------------------------------- */
 let domainGroups = [];
 
+// True once the open-tabs grid has rendered its cards at least once.
+// Used to play the entrance animation only on first paint, not on every
+// live re-render (see the animate-in toggle in renderStaticDashboard).
+let hasRenderedTabs = false;
+
 
 /* ----------------------------------------------------------------
    HELPER: filter out browser-internal pages
@@ -934,6 +940,7 @@ function renderDomainCard(group) {
   const tabs      = group.tabs || [];
   const tabCount  = tabs.length;
   const isLanding = group.domain === '__landing-pages__';
+  const isPinned  = group.domain === '__pinned__';
   const stableId  = 'domain-' + group.domain.replace(/[^a-z0-9]/g, '-');
 
   // Count duplicates (exact URL match)
@@ -1012,7 +1019,7 @@ function renderDomainCard(group) {
       <div class="status-bar"></div>
       <div class="mission-content">
         <div class="mission-top">
-          <span class="mission-name">${isLanding ? 'Homepages' : (group.label || friendlyDomain(group.domain))}</span>
+          <span class="mission-name">${isPinned ? 'Pinned' : isLanding ? 'Homepages' : (group.label || friendlyDomain(group.domain))}</span>
           ${tabBadge}
           ${dupeBadge}
         </div>
@@ -1196,6 +1203,7 @@ async function renderStaticDashboard() {
   domainGroups = [];
   const groupMap    = {};
   const landingTabs = [];
+  const pinnedTabs  = [];
 
   // Custom group rules from config.local.js (if any)
   const customGroups = typeof LOCAL_CUSTOM_GROUPS !== 'undefined' ? LOCAL_CUSTOM_GROUPS : [];
@@ -1219,6 +1227,12 @@ async function renderStaticDashboard() {
 
   for (const tab of realTabs) {
     try {
+      // Pinned tabs always group together, regardless of domain or landing rules.
+      if (tab.pinned) {
+        pinnedTabs.push(tab);
+        continue;
+      }
+
       if (isLandingPage(tab.url)) {
         landingTabs.push(tab);
         continue;
@@ -1252,6 +1266,10 @@ async function renderStaticDashboard() {
     groupMap['__landing-pages__'] = { domain: '__landing-pages__', tabs: landingTabs };
   }
 
+  if (pinnedTabs.length > 0) {
+    groupMap['__pinned__'] = { domain: '__pinned__', tabs: pinnedTabs };
+  }
+
   // Sort: landing pages first, then domains from landing page sites, then by tab count
   // Collect exact hostnames and suffix patterns for priority sorting
   const landingHostnames = new Set(LANDING_PAGE_PATTERNS.map(p => p.hostname).filter(Boolean));
@@ -1261,6 +1279,10 @@ async function renderStaticDashboard() {
     return landingSuffixes.some(s => domain.endsWith(s));
   }
   domainGroups = Object.values(groupMap).sort((a, b) => {
+    const aIsPinned = a.domain === '__pinned__';
+    const bIsPinned = b.domain === '__pinned__';
+    if (aIsPinned !== bIsPinned) return aIsPinned ? -1 : 1;
+
     const aIsLanding = a.domain === '__landing-pages__';
     const bIsLanding = b.domain === '__landing-pages__';
     if (aIsLanding !== bIsLanding) return aIsLanding ? -1 : 1;
@@ -1282,6 +1304,10 @@ async function renderStaticDashboard() {
     if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Open tabs';
     openTabsSectionCount.innerHTML = `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''} &nbsp;&middot;&nbsp; <button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} Close all ${realTabs.length} tabs</button>`;
     openTabsMissionsEl.innerHTML = domainGroups.map(g => renderDomainCard(g)).join('');
+    // Entrance animation plays on first paint only; live re-renders swap cards
+    // in place (class removed) so tab changes don't replay the fade-up.
+    openTabsMissionsEl.classList.toggle('animate-in', !hasRenderedTabs);
+    hasRenderedTabs = true;
     openTabsSection.style.display = 'block';
   } else if (openTabsSection) {
     openTabsSection.style.display = 'none';
@@ -1315,6 +1341,10 @@ document.addEventListener('click', async (e) => {
   // Walk up the DOM to find the nearest element with data-action
   const actionEl = e.target.closest('[data-action]');
   if (!actionEl) return;
+
+  // Note the interaction so live sync waits for our own animations to
+  // finish before re-rendering (see LIVE SYNC at the bottom of the file).
+  lastUserActionAt = Date.now();
 
   const action = actionEl.dataset.action;
 
@@ -1479,9 +1509,9 @@ document.addEventListener('click', async (e) => {
     if (!group) return;
 
     const urls      = group.tabs.map(t => t.url);
-    // Landing pages and custom groups (whose domain key isn't a real hostname)
-    // must use exact URL matching to avoid closing unrelated tabs
-    const useExact  = group.domain === '__landing-pages__' || !!group.label;
+    // Landing pages, pinned tabs, and custom groups (whose domain key isn't a
+    // real hostname) must use exact URL matching to avoid closing unrelated tabs
+    const useExact  = group.domain === '__landing-pages__' || group.domain === '__pinned__' || !!group.label;
 
     if (useExact) {
       await closeTabsExact(urls);
@@ -1498,7 +1528,7 @@ document.addEventListener('click', async (e) => {
     const idx = domainGroups.indexOf(group);
     if (idx !== -1) domainGroups.splice(idx, 1);
 
-    const groupLabel = group.domain === '__landing-pages__' ? 'Homepages' : (group.label || friendlyDomain(group.domain));
+    const groupLabel = group.domain === '__pinned__' ? 'Pinned' : group.domain === '__landing-pages__' ? 'Homepages' : (group.label || friendlyDomain(group.domain));
     showToast(`Closed ${urls.length} tab${urls.length !== 1 ? 's' : ''} from ${groupLabel}`);
 
     const statTabs = document.getElementById('statTabs');
@@ -1815,6 +1845,85 @@ document.getElementById('colorReset').addEventListener('click', () => {
     hexInput.value = '';
   });
   chrome.storage.local.remove('themeOverrides');
+});
+
+
+/* ----------------------------------------------------------------
+   LIVE SYNC — keep the dashboard in step with the real tab set
+
+   The page used to render its tab list exactly once, at load. Tabs
+   opened or closed afterwards (in other windows, or by you directly)
+   left it stale — clicking a chip for an already-closed tab did
+   nothing. Here we subscribe to chrome.tabs events and re-render so
+   the dashboard always reflects what's actually open.
+
+   Three pieces keep it smooth:
+   - Debounce: a burst of changes (e.g. closing 10 tabs) triggers one
+     re-render, not ten.
+   - User-action quiet window: when YOU just acted, your own handler is
+     mid-animation (fade-out, confetti). We wait for that to settle
+     before re-rendering so we don't interrupt it.
+   - Re-apply search: a full re-render rebuilds the cards, so we
+     restore the active filter afterwards.
+
+   While the page is hidden we skip re-rendering and let
+   visibilitychange refresh once when you return — no wasted work.
+   ---------------------------------------------------------------- */
+
+let lastUserActionAt = 0;          // timestamp of the user's last click action
+let liveRefreshTimer = null;
+const LIVE_REFRESH_DEBOUNCE = 350; // ms to coalesce a burst of tab events
+const USER_ACTION_QUIET     = 700; // ms to let the user's own animations finish
+
+async function runLiveRefresh() {
+  liveRefreshTimer = null;
+
+  // Not looking at the page — visibilitychange will refresh on return.
+  if (document.hidden) return;
+
+  // The user just acted; let their fade-out/confetti animation finish first.
+  const sinceAction = Date.now() - lastUserActionAt;
+  if (sinceAction < USER_ACTION_QUIET) {
+    liveRefreshTimer = setTimeout(runLiveRefresh, USER_ACTION_QUIET - sinceAction);
+    return;
+  }
+
+  const query = document.getElementById('tabSearch')?.value || '';
+  await renderDashboard();
+  if (query.trim()) applyTabFilter(query); // restore the active filter
+}
+
+function scheduleLiveRefresh() {
+  clearTimeout(liveRefreshTimer);
+  liveRefreshTimer = setTimeout(runLiveRefresh, LIVE_REFRESH_DEBOUNCE);
+}
+
+function startLiveSync() {
+  // Re-render when tabs are opened, closed, or shuffled between windows.
+  ['onCreated', 'onRemoved', 'onMoved', 'onAttached', 'onDetached']
+    .forEach(ev => chrome.tabs[ev].addListener(scheduleLiveRefresh));
+
+  // onUpdated fires constantly (favicon, audible, status) — only react to
+  // changes that actually affect what we render: URL, title, pin, load complete.
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if ('url' in changeInfo || 'title' in changeInfo || 'pinned' in changeInfo || changeInfo.status === 'complete') {
+      scheduleLiveRefresh();
+    }
+  });
+}
+
+// Wait for the first render's entrance animation to finish before subscribing.
+// Opening a new tab fires this page's own onUpdated 'complete' event, which
+// would otherwise trigger a redundant re-render mid-animation — making the
+// first column flash in, vanish, then animate again. The card animation ends
+// at ~0.8s (0.4s delay + 0.4s duration); 1s leaves a small buffer. Any change
+// during this window is already captured by the initial render.
+setTimeout(startLiveSync, 1000);
+
+// Backstop: refresh once when you switch back to this tab. (Safe to wire
+// immediately — visibilitychange never fires during the initial load.)
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) scheduleLiveRefresh();
 });
 
 

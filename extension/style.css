@@ -209,7 +209,7 @@ header {
 .header-search-input {
   font-family: 'DM Sans', sans-serif;
   font-size: 13px;
-  width: 200px;
+  width: 400px;
   padding: 8px 12px 8px 36px;
   border: 1px solid var(--warm-gray);
   border-radius: 8px;
@@ -221,7 +221,7 @@ header {
 
 .header-search-input:focus {
   border-color: var(--accent-amber);
-  width: 240px;
+  width: 480px;
 }
 
 .header-search-input::placeholder {
@@ -839,10 +839,13 @@ header { animation: fadeUp 0.5s ease both; }
 .tab-cleanup-banner { animation: fadeUp 0.5s ease 0.1s both; }
 .nudge-banner { animation: fadeUp 0.5s ease 0.15s both; }
 .active-section .section-header { animation: fadeUp 0.5s ease 0.2s both; }
-.active-section .missions .mission-card:nth-child(1) { animation: fadeUp 0.4s ease 0.25s both; }
-.active-section .missions .mission-card:nth-child(2) { animation: fadeUp 0.4s ease 0.3s both; }
-.active-section .missions .mission-card:nth-child(3) { animation: fadeUp 0.4s ease 0.35s both; }
-.active-section .missions .mission-card:nth-child(4) { animation: fadeUp 0.4s ease 0.4s both; }
+/* First-paint entrance only (.animate-in is dropped on live re-renders).
+   Every card fades in; the first four stagger, the rest share the final delay */
+.active-section .missions.animate-in .mission-card { animation: fadeUp 0.4s ease 0.4s both; }
+.active-section .missions.animate-in .mission-card:nth-child(1) { animation-delay: 0.25s; }
+.active-section .missions.animate-in .mission-card:nth-child(2) { animation-delay: 0.3s; }
+.active-section .missions.animate-in .mission-card:nth-child(3) { animation-delay: 0.35s; }
+.active-section .missions.animate-in .mission-card:nth-child(4) { animation-delay: 0.4s; }
 .abandoned-section .section-header { animation: fadeUp 0.5s ease 0.45s both; }
 .abandoned-section .missions .mission-card:nth-child(1) { animation: fadeUp 0.4s ease 0.5s both; }
 .abandoned-section .missions .mission-card:nth-child(2) { animation: fadeUp 0.4s ease 0.55s both; }
