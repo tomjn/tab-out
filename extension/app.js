@@ -844,11 +844,6 @@ let domainGroups = [];
 // live re-render (see the animate-in toggle in renderStaticDashboard).
 let hasRenderedTabs = false;
 
-// Stable IDs of domain groups whose "+N more" overflow the user has expanded.
-// A live re-render rebuilds the cards collapsed, so we re-expand these after
-// (see applyExpandedGroups). Keeps closing several revealed tabs in a row sane.
-const expandedGroups = new Set();
-
 
 /* ----------------------------------------------------------------
    HELPER: filter out browser-internal pages
@@ -895,43 +890,6 @@ function checkTabOutDupes() {
 
 
 /* ----------------------------------------------------------------
-   OVERFLOW CHIPS ("+N more" expand button in domain cards)
-   ---------------------------------------------------------------- */
-
-function buildOverflowChips(hiddenTabs, urlCounts = {}) {
-  const hiddenChips = hiddenTabs.map(tab => {
-    const label    = cleanTitle(smartTitle(stripTitleNoise(tab.title || ''), tab.url), '');
-    const count    = urlCounts[tab.url] || 1;
-    const dupeTag  = count > 1 ? ` <span class="chip-dupe-badge">(${count}x)</span>` : '';
-    const chipClass = count > 1 ? ' chip-has-dupes' : '';
-    const safeUrl   = (tab.url || '').replace(/"/g, '&quot;');
-    const safeTitle = label.replace(/"/g, '&quot;');
-    let domain = '';
-    try { domain = new URL(tab.url).hostname; } catch {}
-    const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
-    return `<div class="page-chip clickable${chipClass}" data-action="focus-tab" data-tab-url="${safeUrl}" title="${safeTitle}">
-      ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
-      <span class="chip-text">${label}</span>${dupeTag}
-      <div class="chip-actions">
-        <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="Save for later">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></svg>
-        </button>
-        <button class="chip-action chip-close" data-action="close-single-tab" data-tab-url="${safeUrl}" title="Close this tab">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-        </button>
-      </div>
-    </div>`;
-  }).join('');
-
-  return `
-    <div class="page-chips-overflow" style="display:none">${hiddenChips}</div>
-    <div class="page-chip page-chip-overflow clickable" data-action="expand-chips">
-      <span class="chip-text">+${hiddenTabs.length} more</span>
-    </div>`;
-}
-
-
-/* ----------------------------------------------------------------
    DOMAIN CARD RENDERER
    ---------------------------------------------------------------- */
 
@@ -973,10 +931,7 @@ function renderDomainCard(group) {
     if (!seen.has(tab.url)) { seen.add(tab.url); uniqueTabs.push(tab); }
   }
 
-  const visibleTabs = uniqueTabs.slice(0, 8);
-  const extraCount  = uniqueTabs.length - visibleTabs.length;
-
-  const pageChips = visibleTabs.map(tab => {
+  const pageChips = uniqueTabs.map(tab => {
     let label = cleanTitle(smartTitle(stripTitleNoise(tab.title || ''), tab.url), group.domain);
     // For localhost tabs, prepend port number so you can tell projects apart
     try {
@@ -1003,7 +958,7 @@ function renderDomainCard(group) {
         </button>
       </div>
     </div>`;
-  }).join('') + (extraCount > 0 ? buildOverflowChips(uniqueTabs.slice(8), urlCounts) : '');
+  }).join('');
 
   let actionsHtml = `
     <button class="action-btn close-tabs" data-action="close-domain-tabs" data-domain-id="${stableId}">
@@ -1369,18 +1324,6 @@ document.addEventListener('click', async (e) => {
 
   const card = actionEl.closest('.mission-card');
 
-  // ---- Expand overflow chips ("+N more") ----
-  if (action === 'expand-chips') {
-    const overflowContainer = actionEl.parentElement.querySelector('.page-chips-overflow');
-    if (overflowContainer) {
-      overflowContainer.style.display = 'contents';
-      actionEl.remove();
-    }
-    // Remember this group is expanded so a live re-render keeps it open.
-    if (card && card.dataset.domainId) expandedGroups.add(card.dataset.domainId);
-    return;
-  }
-
   // ---- Focus a specific tab ----
   if (action === 'focus-tab') {
     const tabUrl = actionEl.dataset.tabUrl;
@@ -1666,7 +1609,7 @@ function isTypingTarget(el) {
 /**
  * applyTabFilter(query)
  * Shows/hides domain cards and their tab chips to match the query.
- * Empty query restores the default (collapsed-overflow) view.
+ * Empty query restores the default view.
  */
 function applyTabFilter(query) {
   const q = (query || '').trim().toLowerCase();
@@ -1678,10 +1621,6 @@ function applyTabFilter(query) {
     cards.forEach(card => {
       card.style.display = '';
       card.querySelectorAll('.page-chip').forEach(chip => { chip.style.display = ''; });
-      const overflow = card.querySelector('.page-chips-overflow');
-      if (overflow) overflow.style.display = 'none';
-      const expandBtn = card.querySelector('.page-chip-overflow');
-      if (expandBtn) expandBtn.style.display = '';
     });
     if (emptyEl) emptyEl.style.display = 'none';
     return;
@@ -1694,7 +1633,6 @@ function applyTabFilter(query) {
     const nameMatch = nameEl ? nameEl.textContent.toLowerCase().includes(q) : false;
 
     let cardHasMatch = false;
-    // Search every tab chip, including those tucked inside the "+N more" overflow
     card.querySelectorAll('.page-chip[data-action="focus-tab"]').forEach(chip => {
       const textEl = chip.querySelector('.chip-text');
       const text   = (textEl ? textEl.textContent : '').toLowerCase();
@@ -1703,13 +1641,6 @@ function applyTabFilter(query) {
       chip.style.display = show ? '' : 'none';
       if (show) cardHasMatch = true;
     });
-
-    // Reveal collapsed overflow chips so matches inside them are visible,
-    // and hide the "+N more" button while a search is active.
-    const overflow = card.querySelector('.page-chips-overflow');
-    if (overflow) overflow.style.display = cardHasMatch ? 'contents' : 'none';
-    const expandBtn = card.querySelector('.page-chip-overflow');
-    if (expandBtn) expandBtn.style.display = 'none';
 
     card.style.display = cardHasMatch ? '' : 'none';
     if (cardHasMatch) anyVisible = true;
@@ -1882,28 +1813,6 @@ let liveRefreshTimer = null;
 const LIVE_REFRESH_DEBOUNCE = 350; // ms to coalesce a burst of tab events
 const USER_ACTION_QUIET     = 700; // ms to let the user's own animations finish
 
-/**
- * applyExpandedGroups()
- * Re-expands any "+N more" overflow the user had opened, since a re-render
- * rebuilds cards collapsed. Also forgets groups that no longer exist so a
- * later same-domain group doesn't auto-expand unexpectedly.
- */
-function applyExpandedGroups() {
-  const liveIds = new Set();
-  document.querySelectorAll('#openTabsMissions .mission-card').forEach(card => {
-    const id = card.dataset.domainId;
-    liveIds.add(id);
-    if (!expandedGroups.has(id)) return;
-    const overflow = card.querySelector('.page-chips-overflow');
-    if (overflow) overflow.style.display = 'contents';
-    const expandBtn = card.querySelector('.page-chip-overflow');
-    if (expandBtn) expandBtn.remove();
-  });
-  for (const id of expandedGroups) {
-    if (!liveIds.has(id)) expandedGroups.delete(id);
-  }
-}
-
 async function runLiveRefresh() {
   liveRefreshTimer = null;
 
@@ -1919,7 +1828,6 @@ async function runLiveRefresh() {
 
   const query = document.getElementById('tabSearch')?.value || '';
   await renderDashboard();
-  applyExpandedGroups();                    // keep opened "+N more" groups open
   if (query.trim()) applyTabFilter(query);  // restore the active filter
 }
 
