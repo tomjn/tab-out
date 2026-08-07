@@ -604,7 +604,7 @@ function checkAndShowEmptyState() {
   `;
 
   const countEl = document.getElementById('openTabsSectionCount');
-  if (countEl) countEl.textContent = '0 domains';
+  if (countEl) countEl.textContent = '0 tabs';
 }
 
 /**
@@ -935,9 +935,9 @@ function renderDomainCard(group) {
   const hasDupes   = dupeUrls.length > 0;
   const totalExtras = dupeUrls.reduce((s, [, c]) => s + c - 1, 0);
 
-  const tabBadge = `<span class="open-tabs-badge">
+  const tabBadge = `<span class="open-tabs-badge tab-count-badge" aria-label="${tabCount} open tab${tabCount !== 1 ? 's' : ''}">
     ${ICONS.tabs}
-    ${tabCount} tab${tabCount !== 1 ? 's' : ''} open
+    ${tabCount}
   </span>`;
 
   const dupeBadge = hasDupes
@@ -1282,7 +1282,7 @@ async function renderStaticDashboard() {
 
   if (domainGroups.length > 0 && openTabsSection) {
     if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Open tabs';
-    openTabsSectionCount.innerHTML = `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''} &nbsp;&middot;&nbsp; <button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} Close all ${realTabs.length} tabs</button>`;
+    openTabsSectionCount.innerHTML = `${realTabs.length} tab${realTabs.length !== 1 ? 's' : ''} &nbsp;&middot;&nbsp; ${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''} &nbsp;&middot;&nbsp; <button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} Close all</button>`;
     openTabsMissionsEl.innerHTML = domainGroups.map(g => renderDomainCard(g)).join('');
     // Entrance animation plays on first paint only; live re-renders swap cards
     // in place (class removed) so tab changes don't replay the fade-up.
@@ -1295,7 +1295,7 @@ async function renderStaticDashboard() {
 
   // --- Footer stats ---
   const statTabs = document.getElementById('statTabs');
-  if (statTabs) statTabs.textContent = openTabs.length;
+  if (statTabs) statTabs.textContent = getRealTabs().length;
 
   // --- Check for duplicate Tab Out tabs ---
   checkTabOutDupes();
@@ -1388,7 +1388,7 @@ document.addEventListener('click', async (e) => {
 
     // Update footer
     const statTabs = document.getElementById('statTabs');
-    if (statTabs) statTabs.textContent = openTabs.length;
+    if (statTabs) statTabs.textContent = getRealTabs().length;
 
     showToast('Tab closed');
     return;
