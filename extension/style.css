@@ -151,18 +151,14 @@ body::before {
 .container {
   position: relative;
   z-index: 1;
-  max-width: 960px;
+  max-width: 1300px;
   margin: 0 auto;
   padding: 48px 32px 80px;
 }
 
-/* When the saved-for-later sidebar is open, expand the container
-   so the tab grid still has room for 2-3 columns */
-.container:has(.dashboard-columns) {
-  max-width: 1300px;
-}
-
-/* ---- Header ---- */
+/* ---- Header ----
+   No rule underneath: the section header below draws one already, and two
+   stacked lines read as a gap with something missing between them. */
 header {
   display: flex;
   justify-content: space-between;
@@ -923,7 +919,6 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 .deferred-list .deferred-item:nth-child(3) { animation-delay: 0.15s; }
 .deferred-list .deferred-item:nth-child(4) { animation-delay: 0.2s; }
 .deferred-list .deferred-item:nth-child(5) { animation-delay: 0.25s; }
-.deferred-column .section-header { animation: fadeUp 0.5s ease 0.1s both; }
 
 
 /* ================================================================
@@ -1135,38 +1130,91 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
    SAVED FOR LATER — Checklist Column + Archive
    ================================================================ */
 
-/* ---- Two-column layout ---- */
-.dashboard-columns {
-  display: flex;
-  gap: 32px;
-  align-items: flex-start;
+/* ---- Slide-over drawer ----
+   Saved tabs used to sit in a fixed 280px column, so saving one item cost
+   the tab grid a whole column for good. As a drawer it costs nothing until
+   you open it. */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--overlay-backdrop);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
 }
 
-/* Open tabs column keeps the grid layout */
-.dashboard-columns .active-section {
-  flex: 1;
-  min-width: 600px;
+.drawer-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
-/* Saved for later column — fixed width on the right, scrolls independently */
-.deferred-column {
-  width: 280px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 32px;
-  max-height: calc(100vh - 64px);
+.drawer-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 340px;
+  max-width: 90vw;
+  height: 100%;
+  padding: 24px 24px 32px;
   overflow-y: auto;
+  background: var(--card-bg);
+  border-left: 1px solid var(--warm-gray);
+  box-shadow: -12px 0 32px var(--overlay-shadow-card);
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* On narrow screens, stack vertically */
-@media (max-width: 800px) {
-  .dashboard-columns {
-    flex-direction: column;
-  }
-  .deferred-column {
-    width: 100%;
-    position: static;
-  }
+.drawer-overlay.visible .drawer-panel {
+  transform: translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer-panel { transition: none; }
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--warm-gray);
+}
+
+.drawer-head h2 {
+  font-family: 'Newsreader', serif;
+  font-weight: 400;
+  font-size: 18px;
+  font-style: italic;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.drawer-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.drawer-close:hover {
+  color: var(--ink);
+  background: var(--muted-tint-light);
+}
+
+.drawer-close svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* ---- Checklist items ---- */

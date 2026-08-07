@@ -26,19 +26,26 @@
       <!-- "Friday, April 4, 2026" — written by getDateDisplay() in app.js -->
       <div class="date" id="dateDisplay"></div>
     </div>
-    <!-- Search box — filters open tabs by title, URL, or site name.
-         Focus with Cmd/Ctrl+F or "/"; Esc clears. Wired in app.js. -->
-    <div class="header-search">
-      <svg class="header-search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-      </svg>
-      <input type="search" id="tabSearch" class="header-search-input"
-             placeholder="Search tabs…" aria-label="Search tabs"
-             autocomplete="off" spellcheck="false">
-      <kbd class="header-search-hint">/</kbd>
-      <!-- Shown by CSS whenever the input has text (:placeholder-shown) -->
-      <button type="button" class="header-search-clear" id="tabSearchClear" aria-label="Clear search">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+    <div class="header-right">
+      <!-- Search box — filters open tabs by title, URL, or site name.
+           Focus with Cmd/Ctrl+F or "/"; Esc clears. Wired in app.js. -->
+      <div class="header-search">
+        <svg class="header-search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+        </svg>
+        <input type="search" id="tabSearch" class="header-search-input"
+               placeholder="Search tabs…" aria-label="Search tabs"
+               autocomplete="off" spellcheck="false">
+        <kbd class="header-search-hint">/</kbd>
+        <!-- Shown by CSS whenever the input has text (:placeholder-shown) -->
+        <button type="button" class="header-search-clear" id="tabSearchClear" aria-label="Clear search">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+      <!-- Opens the "Saved for later" drawer. Count filled in by app.js. -->
+      <button type="button" class="saved-btn" id="openSavedDrawer" aria-label="Saved for later">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></svg>
+        <span class="saved-btn-count" id="savedCount"></span>
       </button>
     </div>
   </header>
@@ -62,56 +69,20 @@
   </div>
 
   <!-- ================================================================
-       MAIN CONTENT AREA — two-column layout
-       Left: open tabs (domain/mission cards)
-       Right: saved for later checklist
-       The right column only renders when it has items (JS controls this)
+       MAIN CONTENT AREA — the open tabs grid.
+       "Saved for later" lives in a drawer (see below) so it never
+       costs the grid a column.
        ================================================================ -->
-  <div class="dashboard-columns" id="dashboardColumns">
-
-    <!-- LEFT COLUMN: Open tabs -->
-    <div class="active-section" id="openTabsSection" style="display:none">
-      <div class="section-header">
-        <h2 id="openTabsSectionTitle">Right now</h2>
-        <div class="section-line"></div>
-        <div class="section-count" id="openTabsSectionCount"></div>
-      </div>
-      <!-- No-results message — shown by applyTabFilter() when a search matches nothing -->
-      <div class="search-empty" id="searchEmpty" style="display:none">No tabs match “<span id="searchEmptyQ"></span>”.</div>
-      <div class="missions" id="openTabsMissions"></div>
+  <main class="active-section" id="openTabsSection" style="display:none">
+    <div class="section-header">
+      <h2 id="openTabsSectionTitle">Right now</h2>
+      <div class="section-line"></div>
+      <div class="section-count" id="openTabsSectionCount"></div>
     </div>
-
-    <!-- RIGHT COLUMN: Saved for Later checklist -->
-    <div class="deferred-column" id="deferredColumn" style="display:none">
-      <div class="section-header">
-        <h2>Saved for later</h2>
-        <div class="section-line"></div>
-        <div class="section-count" id="deferredCount"></div>
-      </div>
-
-      <!-- Active checklist items — injected by renderDeferredList() in app.js -->
-      <div class="deferred-list" id="deferredList"></div>
-
-      <!-- Empty state — shown when no active deferred tabs -->
-      <div class="deferred-empty" id="deferredEmpty" style="display:none">
-        Nothing saved. Living in the moment.
-      </div>
-
-      <!-- Archive section — collapsed by default -->
-      <div class="deferred-archive" id="deferredArchive" style="display:none">
-        <button class="archive-toggle" id="archiveToggle">
-          <svg class="archive-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
-          Archive
-          <span class="archive-count" id="archiveCount"></span>
-        </button>
-        <div class="archive-body" id="archiveBody" style="display:none">
-          <input type="text" class="archive-search" id="archiveSearch" placeholder="Search archived tabs...">
-          <div class="archive-list" id="archiveList"></div>
-        </div>
-      </div>
-    </div>
-
-  </div><!-- end .dashboard-columns -->
+    <!-- No-results message — shown by applyTabFilter() when a search matches nothing -->
+    <div class="search-empty" id="searchEmpty" style="display:none">No tabs match “<span id="searchEmptyQ"></span>”.</div>
+    <div class="missions" id="openTabsMissions"></div>
+  </main>
 
   <!-- ================================================================
        FOOTER — global stats + refresh control
@@ -146,6 +117,43 @@
     <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
   </svg>
   <span id="toastText"></span>
+</div>
+
+<!-- ================================================================
+     SAVED FOR LATER — slide-over drawer, opened from the header
+     bookmark button. Hidden by default; .visible slides it in.
+     ================================================================ -->
+<div class="drawer-overlay" id="savedDrawer">
+  <aside class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="savedDrawerTitle">
+    <div class="drawer-head">
+      <h2 id="savedDrawerTitle">Saved for later</h2>
+      <span class="section-count" id="deferredCount"></span>
+      <button type="button" class="drawer-close" id="closeSavedDrawer" aria-label="Close saved for later">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+      </button>
+    </div>
+
+    <!-- Active checklist items — injected by renderSavedDrawer() in app.js -->
+    <div class="deferred-list" id="deferredList"></div>
+
+    <!-- Empty state — shown when no active deferred tabs -->
+    <div class="deferred-empty" id="deferredEmpty" style="display:none">
+      Nothing saved. Living in the moment.
+    </div>
+
+    <!-- Archive section — collapsed by default -->
+    <div class="deferred-archive" id="deferredArchive" style="display:none">
+      <button class="archive-toggle" id="archiveToggle">
+        <svg class="archive-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+        Archive
+        <span class="archive-count" id="archiveCount"></span>
+      </button>
+      <div class="archive-body" id="archiveBody" style="display:none">
+        <input type="text" class="archive-search" id="archiveSearch" placeholder="Search archived tabs...">
+        <div class="archive-list" id="archiveList"></div>
+      </div>
+    </div>
+  </aside>
 </div>
 
 <!-- ================================================================

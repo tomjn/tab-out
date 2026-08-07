@@ -1019,33 +1019,29 @@ function renderDomainCard(group) {
    ---------------------------------------------------------------- */
 
 /**
- * renderDeferredColumn()
+ * renderSavedDrawer()
  *
- * Reads saved tabs from chrome.storage.local and renders the right-side
- * "Saved for Later" checklist column. Shows active items as a checklist
- * and completed items in a collapsible archive.
+ * Reads saved tabs from chrome.storage.local and fills the "Saved for later"
+ * drawer: active items as a checklist, completed items in a collapsible
+ * archive. Also updates the count on the header button that opens it.
  */
-async function renderDeferredColumn() {
-  const column         = document.getElementById('deferredColumn');
+async function renderSavedDrawer() {
+  const drawer         = document.getElementById('savedDrawer');
   const list           = document.getElementById('deferredList');
   const empty          = document.getElementById('deferredEmpty');
   const countEl        = document.getElementById('deferredCount');
+  const badge          = document.getElementById('savedCount');
   const archiveEl      = document.getElementById('deferredArchive');
   const archiveCountEl = document.getElementById('archiveCount');
   const archiveList    = document.getElementById('archiveList');
 
-  if (!column) return;
+  if (!drawer) return;
 
   try {
     const { active, archived } = await getSavedTabs();
 
-    // Hide the entire column if there's nothing to show
-    if (active.length === 0 && archived.length === 0) {
-      column.style.display = 'none';
-      return;
-    }
-
-    column.style.display = 'block';
+    // Header button count. Blank rather than "0" so the button stays icon-only.
+    if (badge) badge.textContent = active.length > 0 ? String(active.length) : '';
 
     // Render active checklist items
     if (active.length > 0) {
@@ -1070,7 +1066,6 @@ async function renderDeferredColumn() {
 
   } catch (err) {
     console.warn('[tab-out] Could not load saved tabs:', err);
-    column.style.display = 'none';
   }
 }
 
@@ -1301,7 +1296,7 @@ async function renderStaticDashboard() {
   checkTabOutDupes();
 
   // --- Render "Saved for Later" column ---
-  await renderDeferredColumn();
+  await renderSavedDrawer();
 }
 
 async function renderDashboard() {
@@ -1427,7 +1422,7 @@ document.addEventListener('click', async (e) => {
     }
 
     showToast('Saved for later');
-    await renderDeferredColumn();
+    await renderSavedDrawer();
     return;
   }
 
@@ -1446,7 +1441,7 @@ document.addEventListener('click', async (e) => {
         item.classList.add('removing');
         setTimeout(() => {
           item.remove();
-          renderDeferredColumn(); // refresh counts and archive
+          renderSavedDrawer(); // refresh counts and archive
         }, 300);
       }, 800);
     }
@@ -1465,7 +1460,7 @@ document.addEventListener('click', async (e) => {
       item.classList.add('removing');
       setTimeout(() => {
         item.remove();
-        renderDeferredColumn();
+        renderSavedDrawer();
       }, 300);
     }
     return;
@@ -1716,6 +1711,43 @@ document.addEventListener('keydown', (e) => {
     applyTabFilter('');
     searchInput.blur();
   }
+});
+
+
+/* ----------------------------------------------------------------
+   SAVED FOR LATER DRAWER
+
+   Opened from the bookmark button in the header. It slides over the
+   grid rather than sitting beside it, so the tab cards keep the full
+   width whether or not you have anything saved.
+   ---------------------------------------------------------------- */
+
+const savedDrawer = document.getElementById('savedDrawer');
+const savedDrawerBtn = document.getElementById('openSavedDrawer');
+
+function showSavedDrawer() {
+  savedDrawer.classList.add('visible');
+  document.getElementById('closeSavedDrawer').focus();
+}
+
+function hideSavedDrawer() {
+  savedDrawer.classList.remove('visible');
+  savedDrawerBtn.focus();
+}
+
+savedDrawerBtn.addEventListener('click', async () => {
+  await renderSavedDrawer();
+  showSavedDrawer();
+});
+
+document.getElementById('closeSavedDrawer').addEventListener('click', hideSavedDrawer);
+
+savedDrawer.addEventListener('click', (e) => {
+  if (e.target === savedDrawer) hideSavedDrawer();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && savedDrawer.classList.contains('visible')) hideSavedDrawer();
 });
 
 
