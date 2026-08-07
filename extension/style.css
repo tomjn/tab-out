@@ -158,7 +158,10 @@ body::before {
 .container {
   position: relative;
   z-index: 1;
-  max-width: 1300px;
+  /* Wide enough for five 280px card columns plus their 12px gaps and the
+     32px page padding: (5 * 280) + (4 * 12) + (2 * 32). Narrower screens
+     just get fewer columns, since .missions is a multi-column layout. */
+  max-width: 1512px;
   margin: 0 auto;
   padding: 48px 32px 80px;
 }
@@ -170,9 +173,14 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 48px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--warm-gray);
+  margin-bottom: 36px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .header-left h1 {
@@ -501,13 +509,18 @@ header {
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
+  height: 1px;
   background: var(--warm-gray);
 }
 
 .mission-card.has-active-bar::before { background: var(--status-active); }
-.mission-card.has-amber-bar::before { background: var(--accent-amber); }
 .mission-card.has-neutral-bar::before { background: var(--warm-gray); }
+
+/* Cards with duplicates get a heavier bar so the state reads at a glance */
+.mission-card.has-amber-bar::before {
+  height: 2px;
+  background: var(--accent-amber);
+}
 
 .mission-card:hover {
   box-shadow: 0 4px 20px var(--shadow);
@@ -545,14 +558,18 @@ header {
   align-items: center;
   gap: 10px;
   margin-bottom: 6px;
-  flex-wrap: wrap;
 }
 
+/* The name wraps inside its own cell rather than pushing the count and
+   buttons onto a line of their own. Domain names run together into long
+   unbreakable words, so those get split, but only as a last resort. */
 .mission-name {
   font-weight: 600;
   font-size: 15px;
   color: var(--ink);
   letter-spacing: -0.2px;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .mission-tag {
@@ -644,10 +661,13 @@ header {
   border-radius: 2px;
 }
 
-/* Title text — wraps naturally, no truncation */
+/* Title text. Wraps naturally, clamped to two lines. break-word wraps at
+   spaces as usual and only splits a word when that word cannot fit a line
+   on its own, which is what long URLs do. */
 .chip-text {
   flex: 1;
   min-width: 0;
+  overflow-wrap: break-word;
   /* Show up to 2 lines, then ellipsis */
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -666,13 +686,16 @@ header {
   border-color: var(--amber-tint-strong);
 }
 
-/* Action buttons grouped on the right */
+/* Action buttons grouped on the right. The negative margin cancels the
+   button's own padding so the close glyph lines up with the card edge the
+   same distance the favicon does on the left. */
 .chip-actions {
   display: flex;
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
   margin-left: auto;
+  margin-right: -5px;
 }
 
 /* On the card title there's no .page-chip padding to absorb, so the same
