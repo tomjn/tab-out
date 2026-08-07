@@ -173,6 +173,9 @@ async function fetchOpenTabs() {
       windowId: t.windowId,
       active:   t.active,
       pinned:   t.pinned,
+      // The favicon Chrome currently shows on the tab strip, including any
+      // the page swapped in at runtime (Gmail's unread count, for one).
+      favIconUrl: t.favIconUrl || '',
       // Flag Tab Out's own pages so we can detect duplicate new tabs
       isTabOut: t.url === newtabUrl || t.url === 'chrome://newtab/',
     }));
@@ -351,7 +354,9 @@ async function closeTabOutDupes() {
  * saveTabForLater(tab)
  *
  * Saves a single tab to the "Saved for Later" list in chrome.storage.local.
- * @param {{ url: string, title: string }} tab
+ * The favicon is captured now, while the tab is still open: once it closes
+ * there's no way to ask Chrome for it again.
+ * @param {{ url: string, title: string, favIconUrl?: string }} tab
  */
 async function saveTabForLater(tab) {
   const { deferred = [] } = await chrome.storage.local.get('deferred');
@@ -359,6 +364,7 @@ async function saveTabForLater(tab) {
     id:        Date.now().toString(),
     url:       tab.url,
     title:     tab.title,
+    favIconUrl: tab.favIconUrl || '',
     savedAt:   new Date().toISOString(),
     completed: false,
     dismissed: false,
@@ -894,6 +900,22 @@ function checkTabOutDupes() {
    ---------------------------------------------------------------- */
 
 /**
+ * faviconFor(url, favIconUrl)
+ *
+ * Prefers the icon Chrome reports for the tab, which is the live one the
+ * page set: Gmail's unread badge, Calendar's date, and so on. Falls back to
+ * Google's favicon service for tabs with no icon, and for tabs saved before
+ * we started storing one. That fallback is a network request per domain, so
+ * it's worth avoiding where we can.
+ */
+function faviconFor(url, favIconUrl) {
+  if (favIconUrl) return favIconUrl.replace(/"/g, '&quot;');
+  let domain = '';
+  try { domain = new URL(url).hostname; } catch {}
+  return domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
+}
+
+/**
  * renderDomainCard(group, groupIndex)
  *
  * Builds the HTML for one domain group card.
@@ -943,9 +965,7 @@ function renderDomainCard(group) {
     const chipClass = count > 1 ? ' chip-has-dupes' : '';
     const safeUrl   = (tab.url || '').replace(/"/g, '&quot;');
     const safeTitle = label.replace(/"/g, '&quot;');
-    let domain = '';
-    try { domain = new URL(tab.url).hostname; } catch {}
-    const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
+    const faviconUrl = faviconFor(tab.url, tab.favIconUrl);
     return `<div class="page-chip clickable${chipClass}" data-action="focus-tab" data-tab-url="${safeUrl}" title="${safeTitle}">
       ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
       <span class="chip-text">${label}</span>${dupeTag}
@@ -1063,7 +1083,7 @@ async function renderDeferredColumn() {
 function renderDeferredItem(item) {
   let domain = '';
   try { domain = new URL(item.url).hostname.replace(/^www\./, ''); } catch {}
-  const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
+  const faviconUrl = faviconFor(item.url, item.favIconUrl);
   const ago = timeAgo(item.savedAt);
 
   return `
@@ -1381,9 +1401,10 @@ document.addEventListener('click', async (e) => {
     const tabTitle = actionEl.dataset.tabTitle || tabUrl;
     if (!tabUrl) return;
 
-    // Save to chrome.storage.local
+    // Save to chrome.storage.local, keeping the tab's own favicon
+    const openTab = openTabs.find(t => t.url === tabUrl);
     try {
-      await saveTabForLater({ url: tabUrl, title: tabTitle });
+      await saveTabForLater({ url: tabUrl, title: tabTitle, favIconUrl: openTab?.favIconUrl });
     } catch (err) {
       console.error('[tab-out] Failed to save tab:', err);
       showToast('Failed to save tab');
