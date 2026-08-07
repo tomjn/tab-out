@@ -7,10 +7,17 @@
 :root {
   color-scheme: light dark;
 
-  /* ---- Base OKLCH channels ---- */
+  /* ---- Base OKLCH channels ----
+     warm-gray draws the borders, dividers and card top bars. It borrows the
+     accent hue and carries real chroma so edges read as part of the palette
+     rather than as translucent white. Recolour the accent and the edges
+     follow, in CSS and via the JS overrides in app.js. Surfaces and text
+     stay neutral: tinting those turns the whole page brown. */
+  --tint-C: 0.018;
+
   --base-ink-L: 0.2038;  --base-ink-C: 0.0087;  --base-ink-H: 59.1;
   --base-paper-L: 0.9711; --base-paper-C: 0.0074; --base-paper-H: 80.7;
-  --base-warm-gray-L: 0.9153; --base-warm-gray-C: 0.0126; --base-warm-gray-H: 75.4;
+  --base-warm-gray-L: 0.9153; --base-warm-gray-C: var(--tint-C); --base-warm-gray-H: var(--base-amber-H);
   --base-muted-L: 0.6624; --base-muted-C: 0.0148; --base-muted-H: 60.5;
   --base-card-bg-L: 0.9945; --base-card-bg-C: 0.0057; --base-card-bg-H: 84.6;
 

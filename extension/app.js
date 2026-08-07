@@ -65,10 +65,23 @@ function clearColorChannels(prefix) {
   style.removeProperty(`--base-${prefix}-H`);
 }
 
+// Reads a channel the stylesheet defines, including any inline override
+// already applied. Keeps JS from carrying its own copy of the CSS defaults.
+function themeChannel(name, fallback) {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name);
+  const n = parseFloat(raw);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 // When background or text changes, derive dependent colors so borders,
 // card surfaces, and secondary text stay legible against the new base.
+// Borders take their hue from the accent rather than the background, so
+// edges stay in the accent's family. Surfaces and text follow the
+// background. This matches the stylesheet defaults (see --tint-C).
 function applyDerivedColors(overrides) {
   const style = document.documentElement.style;
+  const tintH = themeChannel('--base-amber-H', 50.7);
+  const tintC = themeChannel('--tint-C', 0.030);
 
   if (overrides.paper) {
     const paper = hexToOklch(overrides.paper);
@@ -82,8 +95,8 @@ function applyDerivedColors(overrides) {
 
     setColorChannels('warm-gray', {
       L: isDark ? paper.L + 0.10 : paper.L - 0.06,
-      C: Math.min(paper.C, 0.015),
-      H: paper.H,
+      C: tintC,
+      H: tintH,
     });
 
     if (isDark) {
