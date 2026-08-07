@@ -404,6 +404,22 @@ async function checkOffSavedTab(id) {
 }
 
 /**
+ * restoreSavedTab(id)
+ *
+ * Puts an archived tab back on the active checklist. The reverse of
+ * checkOffSavedTab, for things ticked off by mistake or worth another look.
+ */
+async function restoreSavedTab(id) {
+  const { deferred = [] } = await chrome.storage.local.get('deferred');
+  const tab = deferred.find(t => t.id === id);
+  if (tab) {
+    tab.completed = false;
+    delete tab.completedAt;
+    await chrome.storage.local.set({ deferred });
+  }
+}
+
+/**
  * dismissSavedTab(id)
  *
  * Marks a saved tab as dismissed (removed from all lists).
@@ -1192,6 +1208,9 @@ function renderArchiveItem(item) {
         ${item.title || item.url}
       </a>
       <span class="archive-item-date">${ago}</span>
+      <button class="archive-restore" data-action="restore-deferred" data-deferred-id="${item.id}" title="Put back on the list" aria-label="Put back on the list">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg>
+      </button>
     </div>`;
 }
 
@@ -1525,6 +1544,24 @@ document.addEventListener('click', async (e) => {
         }, 300);
       }, 800);
     }
+    return;
+  }
+
+  // ---- Put an archived tab back on the active checklist ----
+  if (action === 'restore-deferred') {
+    const id = actionEl.dataset.deferredId;
+    if (!id) return;
+
+    await restoreSavedTab(id);
+
+    const item = actionEl.closest('.archive-item');
+    if (item) {
+      item.style.transition = 'opacity 0.2s';
+      item.style.opacity = '0';
+    }
+    setTimeout(renderSavedDrawer, 200);
+
+    showToast('Back on the list');
     return;
   }
 

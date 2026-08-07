@@ -1466,6 +1466,36 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   flex-shrink: 0;
 }
 
+/* Puts an archived item back on the active checklist */
+.archive-restore {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  padding: 0;
+  margin-right: -4px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0.35;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.archive-restore:hover {
+  opacity: 1;
+  color: var(--accent-sage);
+  background: var(--sage-tint-light);
+}
+
+.archive-restore svg {
+  width: 13px;
+  height: 13px;
+}
+
 /* ================================================================
    MODAL OVERLAY (used by the color picker panel)
    ================================================================ */
