@@ -590,6 +590,12 @@ header {
   height: 10px;
 }
 
+/* The count sits with the card's buttons on the right, not with the title.
+   It takes the auto margin so the button group can sit flush beside it. */
+.tab-count-badge {
+  margin-left: auto;
+}
+
 .mission-summary {
   font-size: 13px;
   color: var(--muted);
@@ -660,6 +666,14 @@ header {
   gap: 2px;
   flex-shrink: 0;
   margin-left: auto;
+}
+
+/* On the card title there's no .page-chip padding to absorb, so the same
+   pair needs 4px less pull to line up with the rows below it. The count
+   badge already claimed the auto margin, so this one sits beside it. */
+.chip-actions.in-title {
+  margin-left: 0;
+  margin-right: -1px;
 }
 
 /* ---- Chip action buttons (save + close) ---- */

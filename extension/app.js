@@ -837,6 +837,10 @@ const ICONS = {
   close:   `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>`,
   archive: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5m6 4.125l2.25 2.25m0 0l2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" /></svg>`,
   focus:   `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 19.5 15-15m0 0H8.25m11.25 0v11.25" /></svg>`,
+
+  // The pair used by the save/close buttons on tab rows and card titles
+  bookmark:   `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></svg>`,
+  closeThick: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>`,
 };
 
 
@@ -916,6 +920,78 @@ function faviconFor(url, favIconUrl) {
 }
 
 /**
+ * saveCloseButtons(opts)
+ *
+ * The save/close pair. Tab rows and card titles share one builder so the
+ * card buttons stay identical to the row buttons, only acting on a whole
+ * group instead of one tab.
+ */
+function saveCloseButtons({ saveAction, closeAction, attrs, saveLabel, closeLabel, variant = '' }) {
+  return `<div class="chip-actions${variant ? ' ' + variant : ''}">
+    <button class="chip-action chip-save" data-action="${saveAction}" ${attrs} title="${saveLabel}" aria-label="${saveLabel}">${ICONS.bookmark}</button>
+    <button class="chip-action chip-close" data-action="${closeAction}" ${attrs} title="${closeLabel}" aria-label="${closeLabel}">${ICONS.closeThick}</button>
+  </div>`;
+}
+
+/**
+ * domainCardId(domain) and groupFromId(id)
+ *
+ * Cards carry a stable id derived from the group key, so a click can find
+ * its group again after a re-render.
+ */
+function domainCardId(domain) {
+  return 'domain-' + domain.replace(/[^a-z0-9]/g, '-');
+}
+
+function groupFromId(id) {
+  return domainGroups.find(g => domainCardId(g.domain) === id) || null;
+}
+
+/**
+ * groupDisplayName(group)
+ *
+ * What the card title says.
+ */
+function groupDisplayName(group) {
+  if (group.domain === '__pinned__') return 'Pinned';
+  if (group.domain === '__landing-pages__') return 'Homepages';
+  return group.label || friendlyDomain(group.domain);
+}
+
+/**
+ * groupTabLabel(tab, group)
+ *
+ * The cleaned-up title shown on a tab row, also used when saving.
+ */
+function groupTabLabel(tab, group) {
+  return cleanTitle(smartTitle(stripTitleNoise(tab.title || ''), tab.url), group.domain);
+}
+
+/**
+ * closeGroupTabs(group)
+ *
+ * Closes every tab in a group and drops it from the in-memory list.
+ * Landing pages, pinned tabs, and custom groups key on something that
+ * isn't a real hostname, so they have to match URLs exactly. Plain domain
+ * groups match on hostname instead.
+ */
+async function closeGroupTabs(group) {
+  const urls = group.tabs.map(t => t.url);
+  const useExact = group.domain === '__landing-pages__' || group.domain === '__pinned__' || !!group.label;
+
+  if (useExact) {
+    await closeTabsExact(urls);
+  } else {
+    await closeTabsByUrls(urls);
+  }
+
+  const idx = domainGroups.indexOf(group);
+  if (idx !== -1) domainGroups.splice(idx, 1);
+
+  return urls.length;
+}
+
+/**
  * renderDomainCard(group, groupIndex)
  *
  * Builds the HTML for one domain group card.
@@ -924,9 +1000,7 @@ function faviconFor(url, favIconUrl) {
 function renderDomainCard(group) {
   const tabs      = group.tabs || [];
   const tabCount  = tabs.length;
-  const isLanding = group.domain === '__landing-pages__';
-  const isPinned  = group.domain === '__pinned__';
-  const stableId  = 'domain-' + group.domain.replace(/[^a-z0-9]/g, '-');
+  const stableId  = domainCardId(group.domain);
 
   // Count duplicates (exact URL match)
   const urlCounts = {};
@@ -954,7 +1028,7 @@ function renderDomainCard(group) {
   }
 
   const pageChips = uniqueTabs.map(tab => {
-    let label = cleanTitle(smartTitle(stripTitleNoise(tab.title || ''), tab.url), group.domain);
+    let label = groupTabLabel(tab, group);
     // For localhost tabs, prepend port number so you can tell projects apart
     try {
       const parsed = new URL(tab.url);
@@ -969,42 +1043,48 @@ function renderDomainCard(group) {
     return `<div class="page-chip clickable${chipClass}" data-action="focus-tab" data-tab-url="${safeUrl}" title="${safeTitle}">
       ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
       <span class="chip-text">${label}</span>${dupeTag}
-      <div class="chip-actions">
-        <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="Save for later">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></svg>
-        </button>
-        <button class="chip-action chip-close" data-action="close-single-tab" data-tab-url="${safeUrl}" title="Close this tab">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-        </button>
-      </div>
+      ${saveCloseButtons({
+        saveAction:  'defer-single-tab',
+        closeAction: 'close-single-tab',
+        attrs:       `data-tab-url="${safeUrl}" data-tab-title="${safeTitle}"`,
+        saveLabel:   'Save for later',
+        closeLabel:  'Close this tab',
+      })}
     </div>`;
   }).join('');
 
-  let actionsHtml = `
-    <button class="action-btn close-tabs" data-action="close-domain-tabs" data-domain-id="${stableId}">
-      ${ICONS.close}
-      Close all ${tabCount} tab${tabCount !== 1 ? 's' : ''}
-    </button>`;
+  // The card title carries the same save/close pair as a tab row, acting on
+  // every tab in the group. Only the duplicate cleanup needs a labelled button.
+  const groupButtons = saveCloseButtons({
+    saveAction:  'defer-domain-tabs',
+    closeAction: 'close-domain-tabs',
+    attrs:       `data-domain-id="${stableId}"`,
+    saveLabel:   `Save all ${tabCount} tab${tabCount !== 1 ? 's' : ''} for later`,
+    closeLabel:  `Close all ${tabCount} tab${tabCount !== 1 ? 's' : ''}`,
+    variant:     'in-title',
+  });
 
-  if (hasDupes) {
-    const dupeUrlsEncoded = dupeUrls.map(([url]) => encodeURIComponent(url)).join(',');
-    actionsHtml += `
-      <button class="action-btn" data-action="dedup-keep-one" data-dupe-urls="${dupeUrlsEncoded}">
-        Close ${totalExtras} duplicate${totalExtras !== 1 ? 's' : ''}
-      </button>`;
-  }
+  const dupeUrlsEncoded = dupeUrls.map(([url]) => encodeURIComponent(url)).join(',');
+  const actionsHtml = hasDupes
+    ? `<div class="actions">
+        <button class="action-btn" data-action="dedup-keep-one" data-dupe-urls="${dupeUrlsEncoded}">
+          Close ${totalExtras} duplicate${totalExtras !== 1 ? 's' : ''}
+        </button>
+      </div>`
+    : '';
 
   return `
     <div class="mission-card domain-card ${hasDupes ? 'has-amber-bar' : 'has-neutral-bar'}" data-domain-id="${stableId}">
       <div class="status-bar"></div>
       <div class="mission-content">
         <div class="mission-top">
-          <span class="mission-name">${isPinned ? 'Pinned' : isLanding ? 'Homepages' : (group.label || friendlyDomain(group.domain))}</span>
-          ${tabBadge}
+          <span class="mission-name">${groupDisplayName(group)}</span>
           ${dupeBadge}
+          ${tabBadge}
+          ${groupButtons}
         </div>
         <div class="mission-pages">${pageChips}</div>
-        <div class="actions">${actionsHtml}</div>
+        ${actionsHtml}
       </div>
       <div class="mission-meta">
         <div class="mission-page-count">${tabCount}</div>
@@ -1466,39 +1546,58 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // ---- Close all tabs in a domain group ----
+  // ---- Close every tab in a card ----
   if (action === 'close-domain-tabs') {
-    const domainId = actionEl.dataset.domainId;
-    const group    = domainGroups.find(g => {
-      return 'domain-' + g.domain.replace(/[^a-z0-9]/g, '-') === domainId;
-    });
+    const group = groupFromId(actionEl.dataset.domainId);
     if (!group) return;
 
-    const urls      = group.tabs.map(t => t.url);
-    // Landing pages, pinned tabs, and custom groups (whose domain key isn't a
-    // real hostname) must use exact URL matching to avoid closing unrelated tabs
-    const useExact  = group.domain === '__landing-pages__' || group.domain === '__pinned__' || !!group.label;
-
-    if (useExact) {
-      await closeTabsExact(urls);
-    } else {
-      await closeTabsByUrls(urls);
-    }
+    const closed = await closeGroupTabs(group);
 
     if (card) {
       playCloseSound();
       animateCardOut(card);
     }
 
-    // Remove from in-memory groups
-    const idx = domainGroups.indexOf(group);
-    if (idx !== -1) domainGroups.splice(idx, 1);
-
-    const groupLabel = group.domain === '__pinned__' ? 'Pinned' : group.domain === '__landing-pages__' ? 'Homepages' : (group.label || friendlyDomain(group.domain));
-    showToast(`Closed ${urls.length} tab${urls.length !== 1 ? 's' : ''} from ${groupLabel}`);
+    showToast(`Closed ${closed} tab${closed !== 1 ? 's' : ''} from ${groupDisplayName(group)}`);
 
     const statTabs = document.getElementById('statTabs');
-    if (statTabs) statTabs.textContent = openTabs.length;
+    if (statTabs) statTabs.textContent = getRealTabs().length;
+    return;
+  }
+
+  // ---- Save every tab in a card for later, then close them ----
+  // Same behaviour as the save button on a single tab row, applied to the
+  // whole group. Duplicate URLs are saved once.
+  if (action === 'defer-domain-tabs') {
+    const group = groupFromId(actionEl.dataset.domainId);
+    if (!group) return;
+
+    const seenUrls = new Set();
+    try {
+      for (const tab of group.tabs) {
+        if (seenUrls.has(tab.url)) continue;
+        seenUrls.add(tab.url);
+        await saveTabForLater({
+          url:        tab.url,
+          title:      groupTabLabel(tab, group),
+          favIconUrl: tab.favIconUrl,
+        });
+      }
+    } catch (err) {
+      console.error('[tab-out] Failed to save group:', err);
+      showToast('Failed to save tabs');
+      return;
+    }
+
+    await closeGroupTabs(group);
+
+    if (card) animateCardOut(card);
+
+    showToast(`Saved ${seenUrls.size} tab${seenUrls.size !== 1 ? 's' : ''} for later`);
+    await renderSavedDrawer();
+
+    const statTabs = document.getElementById('statTabs');
+    if (statTabs) statTabs.textContent = getRealTabs().length;
     return;
   }
 
