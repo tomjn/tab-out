@@ -228,7 +228,7 @@ header {
   color: var(--muted);
 }
 
-/* Drop the native search "x" — we clear with Esc instead */
+/* Drop the native search "x". We draw our own, see .header-search-clear */
 .header-search-input::-webkit-search-cancel-button {
   -webkit-appearance: none;
 }
@@ -248,8 +248,82 @@ header {
 }
 
 /* Hide the "/" hint once the box is focused (or has text) */
-.header-search:focus-within .header-search-hint {
+.header-search:focus-within .header-search-hint,
+.header-search-input:not(:placeholder-shown) ~ .header-search-hint {
   opacity: 0;
+}
+
+/* Clear button. It swaps in for the "/" hint as soon as there's a query.
+   :placeholder-shown does the showing and hiding, so there's no JS state. */
+.header-search-clear {
+  position: absolute;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.header-search-input:not(:placeholder-shown) ~ .header-search-clear {
+  opacity: 0.6;
+  visibility: visible;
+}
+
+.header-search-clear:hover {
+  opacity: 1;
+  color: var(--ink);
+  background: var(--muted-tint-light);
+}
+
+.header-search-clear svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* ---- Saved for later button (opens the drawer) ---- */
+.saved-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--warm-gray);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.saved-btn:hover {
+  border-color: var(--accent-amber);
+  color: var(--accent-amber);
+}
+
+.saved-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.saved-btn-count {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Nothing saved: keep the button icon-only rather than showing a bare 0 */
+.saved-btn-count:empty {
+  display: none;
 }
 
 /* No-results message for tab search */

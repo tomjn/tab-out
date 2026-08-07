@@ -1680,6 +1680,16 @@ document.addEventListener('input', (e) => {
   applyTabFilter(e.target.value);
 });
 
+// ---- Clear button inside the search box ----
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#tabSearchClear')) return;
+  const input = document.getElementById('tabSearch');
+  if (!input) return;
+  input.value = '';
+  applyTabFilter('');
+  input.focus();
+});
+
 // ---- Keyboard shortcuts: Cmd/Ctrl+F or "/" to focus, Esc to clear ----
 document.addEventListener('keydown', (e) => {
   const searchInput = document.getElementById('tabSearch');
